@@ -45,7 +45,7 @@ class Uplaysinfo:
                 }
 
             rank_medals = ["🥇", "🥈", "🥉", "🏅"]
-            rank_points = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100]
+            rank_points = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 
             pages_data = []
             leaderboard_data = []
