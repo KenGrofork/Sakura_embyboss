@@ -2,11 +2,12 @@ import asyncio
 from datetime import datetime
 
 from pyrogram import filters
+from pyrogram.types import CallbackQuery
 
 from bot import bot, prefixes, LOGGER, emby_line, owner, bot_photo, schedall
 from bot.func_helper.emby import emby
 from bot.func_helper.filters import admins_on_filter
-from bot.func_helper.fix_bottons import cv_user_ip
+from bot.func_helper.fix_bottons import cv_user_playback_reporting
 from bot.func_helper.msg_utils import sendMessage, editMessage, callAnswer, sendPhoto
 from bot.sql_helper.sql_emby import sql_get_emby, sql_update_emby, Emby
 from bot.sql_helper.sql_emby2 import sql_get_emby2, sql_delete_emby2, sql_add_emby2
@@ -89,9 +90,12 @@ async def urm_user(_, msg):
 
 
 @bot.on_message(filters.command('uinfo', prefixes) & admins_on_filter)
-async def uun_info(_, msg):
+async def uun_info(_, msg, name = None):
     try:
-        n = msg.command[1]
+        if name:
+            n = name
+        else:
+            n = msg.command[1]
     except IndexError:
         return await asyncio.gather(msg.delete(), sendMessage(msg, "⭕ 用法：/uinfo + emby用户名"))
     else:
@@ -120,18 +124,42 @@ async def uun_info(_, msg):
             f"**· 🍒 创建时间** | {e.cr}\n" \
             f"**· 🚨 到期时间** | **{ex}**\n"
 
-    await asyncio.gather(sendPhoto(msg, photo=bot_photo, caption=text, buttons=cv_user_ip(e.embyid)), msg.delete())
+    await asyncio.gather(sendPhoto(msg, photo=bot_photo, caption=text, buttons=cv_user_playback_reporting(e.embyid)), msg.delete())
 
 
 @bot.on_callback_query(filters.regex('userip') & admins_on_filter)
-async def user_cha_ip(_, call):
-    user_id = call.data.split('-')[1]
-    success, result = await emby.get_emby_userip(user_id)
+@bot.on_message(filters.command('userip', prefixes) & admins_on_filter)
+async def user_cha_ip(_, msg, name = None):
+    try:
+        if isinstance(msg, CallbackQuery):
+            user_id = msg.data.split('-')[1]
+            msg = msg.message
+        else:
+            if name:
+                user_id = name
+            else:
+                user_id = msg.command[1]
+    except IndexError:
+        return await sendMessage(msg, "⭕ 用法：/userip + emby用户名")
+        
+    e = sql_get_emby(user_id)
+    if not e:
+        return await sendMessage(msg, f"数据库中未查询到 {user_id}，请手动确认")
+        
+    success, result = await emby.get_emby_userip(e.embyid)
     if not success or len(result) == 0:
-        return await callAnswer(call, '没有更多信息咧')
+        return await sendMessage(msg, '没有更多信息咧')
     else:
         text = '**🌏 以下为该用户播放过的设备&ip**\n\n'
         for r in result:
-            ip, device = r
-            text += f'[{device}](https://whois.pconline.com.cn/ipJson.jsp?ip={ip}&json=true)\n'
-        await bot.send_message(call.from_user.id, text)
+            device, client, ip = r
+            text += f'{device} | {client} | [{ip}](https://whois.pconline.com.cn/ipJson.jsp?ip={ip}&json=true) \n'
+        # 以\n分割文本，每20条发送一个消息
+        messages = text.split('\n')
+        # 每20条消息组成一组
+        for i in range(0, len(messages), 20):
+            chunk = messages[i:i+20]
+            chunk_text = '\n'.join(chunk)
+            if not chunk_text.strip():
+                continue
+            await sendMessage(msg, chunk_text)
