@@ -42,6 +42,26 @@ def sql_add_emby(tg: int):
         except:
             pass
 
+def sql_delete_emby_by_tg(tg):
+    """
+    根据tg删除一条emby记录
+    """
+    with Session() as session:
+        try:
+            emby = session.query(Emby).filter(Emby.tg == tg).first()
+            if emby:
+                session.delete(emby)
+                session.commit()
+                LOGGER.info(f"删除数据库记录成功 {tg}")
+                return True
+            else:
+                LOGGER.info(f"数据库记录不存在 {tg}")
+                return False
+        except Exception as e:
+            LOGGER.error(f"删除数据库记录时发生异常 {e}")
+            session.rollback()
+            return False
+
 
 def sql_delete_emby(tg=None, embyid=None, name=None):
     """
@@ -55,11 +75,19 @@ def sql_delete_emby(tg=None, embyid=None, name=None):
             emby = session.query(Emby).filter(condition).with_for_update().first()
             if emby:
                 session.delete(emby)
-                session.commit()
-                return True
+                try:
+                    session.commit()
+                    return True
+                except Exception as e:
+                    LOGGER.error(f"删除数据库记录时提交事务失败 {e}")
+                    session.rollback()
+                    return False
             else:
-                return None
-        except:
+                LOGGER.info(f"数据库记录不存在 {tg}")
+                return False
+        except Exception as e:
+            LOGGER.error(f"删除数据库记录时发生异常 {e}")
+            session.rollback()
             return False
 
 
